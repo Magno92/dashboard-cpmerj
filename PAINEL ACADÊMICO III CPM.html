@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Acadêmico III CPM/ERJ</title>
+
+    <!-- Configurações PWA e App Mobile -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CPM Dashboard">
+    <link rel="apple-touch-icon" href="icon-512.png">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .card-dark {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+        }
+        .select-dark {
+            background-color: #0f172a;
+            color: #f8fafc;
+            border: 1px solid #475569;
+            border-radius: 0.5rem;
+            padding: 0.6rem 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .select-dark:focus {
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
+
+    <!-- Header -->
+    <header class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+        <div>
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-sky-500/10 text-sky-400 rounded-xl border border-sky-500/20">
+                    <i data-lucide="layout-dashboard" class="w-7 h-7"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tight text-white">Dashboard Acadêmico</h1>
+                    <p class="text-slate-400 text-sm">Análise de Desempenho por Segmento e Turma</p>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-3 bg-slate-800/60 px-4 py-2 rounded-lg border border-slate-700/50">
+            <span id="status-indicator" class="inline-block w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+            <span id="status-text" class="text-xs text-slate-300 font-medium">Conectando à base de dados...</span>
+        </div>
+    </header>
+
+    <!-- Filter Bar -->
+    <section class="card-dark p-6 mb-8">
+        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+            <i data-lucide="filter" class="w-4 h-4 text-sky-400"></i> Filtros Relacionais
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div>
+                <label class="block text-xs font-medium text-slate-300 mb-2">1. Selecione o Segmento</label>
+                <select id="select-segmento" class="select-dark w-full" onchange="onSegmentoChange()">
+                    <option value="ALL">Todos os Segmentos</option>
+                    <option value="EF">Ensino Fundamental (6º ao 9º)</option>
+                    <option value="EM_1_2">1º e 2º Anos Ensino Médio</option>
+                    <option value="EM_3">3º Ano Ensino Médio</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-300 mb-2">2. Selecione o Trimestre</label>
+                <select id="select-trimestre" class="select-dark w-full" onchange="applyFilters()">
+                    <option value="ALL">Todos os Trimestres</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-300 mb-2">3. Selecione a Turma</label>
+                <select id="select-turma" class="select-dark w-full" onchange="onTurmaChange()">
+                    <option value="ALL">Todas as Turmas</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-300 mb-2">4. Selecione o Aluno</label>
+                <select id="select-aluno" class="select-dark w-full" onchange="applyFilters()">
+                    <option value="ALL">Todos os Alunos (Média do Grupo)</option>
+                </select>
+            </div>
+        </div>
+    </section>
+
+    <!-- KPI Cards -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="card-dark p-5">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-xs font-medium text-slate-400 uppercase">Média Geral</p>
+                    <h3 id="kpi-media" class="text-3xl font-extrabold text-white mt-1">--</h3>
+                </div>
+                <div class="p-2 bg-sky-500/10 text-sky-400 rounded-lg">
+                    <i data-lucide="award" class="w-5 h-5"></i>
+                </div>
+            </div>
+            <div class="mt-4 flex items-center gap-2">
+                <span id="badge-status" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-300">
+                    Aguardando dados
+                </span>
+            </div>
+        </div>
+
+        <div class="card-dark p-5">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-xs font-medium text-slate-400 uppercase">Maior Nota</p>
+                    <h3 id="kpi-melhor-disciplina" class="text-lg font-bold text-emerald-400 mt-1 truncate max-w-[180px]">--</h3>
+                    <p id="kpi-melhor-nota" class="text-2xl font-extrabold text-white mt-0.5">--</p>
+                </div>
+                <div class="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg">
+                    <i data-lucide="trending-up" class="w-5 h-5"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-dark p-5">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-xs font-medium text-slate-400 uppercase">Ponto de Atenção</p>
+                    <h3 id="kpi-pior-disciplina" class="text-lg font-bold text-amber-400 mt-1 truncate max-w-[180px]">--</h3>
+                    <p id="kpi-pior-nota" class="text-2xl font-extrabold text-white mt-0.5">--</p>
+                </div>
+                <div class="p-2 bg-amber-500/10 text-amber-400 rounded-lg">
+                    <i data-lucide="alert-circle" class="w-5 h-5"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-dark p-5">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-xs font-medium text-slate-400 uppercase">Amostra Selecionada</p>
+                    <h3 id="kpi-contagem" class="text-3xl font-extrabold text-white mt-1">--</h3>
+                    <p id="kpi-subtexto" class="text-xs text-slate-400 mt-1">Registros analisados</p>
+                </div>
+                <div class="p-2 bg-purple-500/10 text-purple-400 rounded-lg">
+                    <i data-lucide="users" class="w-5 h-5"></i>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Charts Grid -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div class="card-dark p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-semibold text-white flex items-center gap-2">
+                    <i data-lucide="bar-chart-3" class="w-5 h-5 text-sky-400"></i> Notas por Disciplina
+                </h3>
+                <div class="flex gap-2 text-[10px] font-semibold">
+                    <span class="px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">&lt;7.0</span>
+                    <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">7.0 - 8.5</span>
+                    <span class="px-2 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-500/30">&gt;8.5</span>
+                </div>
+            </div>
+            <div class="relative h-72">
+                <canvas id="chart-barras"></canvas>
+            </div>
+        </div>
+
+        <div class="card-dark p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-semibold text-white flex items-center gap-2">
+                    <i data-lucide="radar" class="w-5 h-5 text-purple-400"></i> Perfil de Desempenho (Radar)
+                </h3>
+                <span class="text-xs text-slate-400">Comparação Multidisciplinar</span>
+            </div>
+            <div class="relative h-72">
+                <canvas id="chart-radar"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- Detailed Table -->
+    <section class="card-dark p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div>
+                <h3 class="text-base font-semibold text-white flex items-center gap-2">
+                    <i data-lucide="table" class="w-5 h-5 text-sky-400"></i> Detalhamento das Notas
+                </h3>
+                <p class="text-xs text-slate-400">Registros correspondentes ao filtro atual</p>
+            </div>
+            <div class="relative min-w-[240px]">
+                <input type="text" id="table-search" oninput="renderTable()" placeholder="Buscar aluno..." class="select-dark w-full text-xs pl-8">
+                <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5"></i>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-xs text-left text-slate-300">
+                <thead id="table-head" class="text-xs text-slate-400 uppercase bg-slate-900/60 border-b border-slate-700">
+                </thead>
+                <tbody id="table-body" class="divide-y divide-slate-800"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <script>
+        const API_URL = "SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI";
+
+        let RAW_DATA = [];
+        let activeSubjects = [];
+        let chartBarInstance = null;
+        let chartRadarInstance = null;
+
+        const reservedKeys = ["TURMA", "ALUNO", "TRIMESTRE", "ABA"];
+
+        lucide.createIcons();
+
+        function getSegmentoFromTurma(turmaNum) {
+            const num = parseInt(turmaNum, 10);
+            if (isNaN(num)) return "OUTRO";
+            if (num < 1000) return "EF";
+            if (num < 3000) return "EM_1_2";
+            return "EM_3";
+        }
+
+        function getSegmentoNome(segKey) {
+            if (segKey === "EF") return "Ensino Fundamental";
+            if (segKey === "EM_1_2") return "1º / 2º Ano Médio";
+            if (segKey === "EM_3") return "3º Ano Médio";
+            return "Outro";
+        }
+
+        function parseGrade(val) {
+            if (val === undefined || val === null || val === '') return 0;
+            if (typeof val === 'number') return val;
+            return parseFloat(val.toString().replace(',', '.')) || 0;
+        }
+
+        async function fetchSheetData() {
+            try {
+                const response = await fetch(API_URL);
+                RAW_DATA = await response.json();
+
+                RAW_DATA.forEach(row => {
+                    row.SEGMENTO = getSegmentoFromTurma(row.TURMA);
+                });
+
+                document.getElementById('status-indicator').className = 'inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
+                document.getElementById('status-text').innerText = 'Base de Dados Atualizada';
+
+                updateSecondaryDropdowns();
+                applyFilters();
+            } catch (error) {
+                console.error("Erro ao carregar dados:", error);
+                document.getElementById('status-indicator').className = 'inline-block w-2.5 h-2.5 rounded-full bg-rose-500';
+                document.getElementById('status-text').innerText = 'Erro ao conectar à planilha';
+            }
+        }
+
+        function extractSubjects(dataSubset) {
+            const keysSet = new Set();
+            dataSubset.forEach(row => {
+                Object.keys(row).forEach(key => {
+                    if (!reservedKeys.includes(key) && key !== "SEGMENTO") {
+                        keysSet.add(key);
+                    }
+                });
+            });
+            return Array.from(keysSet);
+        }
+
+        function onSegmentoChange() {
+            updateSecondaryDropdowns();
+            applyFilters();
+        }
+
+        function updateSecondaryDropdowns() {
+            const selSegmento = document.getElementById('select-segmento').value;
+            
+            let filtered = RAW_DATA;
+            if (selSegmento !== 'ALL') {
+                filtered = RAW_DATA.filter(d => d.SEGMENTO === selSegmento);
+            }
+
+            const trimestres = [...new Set(filtered.map(d => d.TRIMESTRE))].filter(Boolean);
+            const turmas = [...new Set(filtered.map(d => d.TURMA))].filter(Boolean).sort((a,b) => a - b);
+
+            const selTrimestre = document.getElementById('select-trimestre');
+            const selTurma = document.getElementById('select-turma');
+
+            selTrimestre.innerHTML = '<option value="ALL">Todos os Trimestres</option>';
+            selTurma.innerHTML = '<option value="ALL">Todas as Turmas</option>';
+
+            trimestres.forEach(t => selTrimestre.innerHTML += `<option value="${t}">${t}</option>`);
+            turmas.forEach(t => selTurma.innerHTML += `<option value="${t}">${t}</option>`);
+
+            updateAlunoDropdown();
+        }
+
+        function onTurmaChange() {
+            updateAlunoDropdown();
+            applyFilters();
+        }
+
+        function updateAlunoDropdown() {
+            const selSegmento = document.getElementById('select-segmento').value;
+            const selectedTurma = document.getElementById('select-turma').value;
+            const selAluno = document.getElementById('select-aluno');
+            selAluno.innerHTML = '<option value="ALL">Todos os Alunos (Média do Grupo)</option>';
+
+            let filtered = RAW_DATA;
+            if (selSegmento !== 'ALL') filtered = filtered.filter(d => d.SEGMENTO === selSegmento);
+            if (selectedTurma !== 'ALL') filtered = filtered.filter(d => String(d.TURMA) === String(selectedTurma));
+
+            const alunos = [...new Set(filtered.map(d => d.ALUNO))].filter(Boolean).sort();
+            alunos.forEach(a => selAluno.innerHTML += `<option value="${a}">${a}</option>`);
+        }
+
+        function applyFilters() {
+            const selSegmento = document.getElementById('select-segmento').value;
+            const selTrimestre = document.getElementById('select-trimestre').value;
+            const selTurma = document.getElementById('select-turma').value;
+            const selAluno = document.getElementById('select-aluno').value;
+
+            const filteredData = RAW_DATA.filter(item => {
+                const matchSeg = selSegmento === 'ALL' || item.SEGMENTO === selSegmento;
+                const matchTrim = selTrimestre === 'ALL' || item.TRIMESTRE === selTrimestre;
+                const matchTurma = selTurma === 'ALL' || String(item.TURMA) === String(selTurma);
+                const matchAluno = selAluno === 'ALL' || item.ALUNO === selAluno;
+                return matchSeg && matchTrim && matchTurma && matchAluno;
+            });
+
+            activeSubjects = extractSubjects(filteredData.length > 0 ? filteredData : RAW_DATA);
+
+            updateKPIs(filteredData);
+            renderCharts(filteredData);
+            renderTable(filteredData);
+        }
+
+        function updateKPIs(data) {
+            if (data.length === 0) {
+                document.getElementById('kpi-media').innerText = '--';
+                document.getElementById('kpi-melhor-disciplina').innerText = '--';
+                document.getElementById('kpi-melhor-nota').innerText = '--';
+                document.getElementById('kpi-pior-disciplina').innerText = '--';
+                document.getElementById('kpi-pior-nota').innerText = '--';
+                document.getElementById('kpi-contagem').innerText = '0';
+                return;
+            }
+
+            let grandTotal = 0;
+            let totalCount = 0;
+            let subjectSums = {};
+            let subjectCounts = {};
+
+            activeSubjects.forEach(s => { subjectSums[s] = 0; subjectCounts[s] = 0; });
+
+            data.forEach(row => {
+                activeSubjects.forEach(s => {
+                    const grade = parseGrade(row[s]);
+                    if (grade > 0) {
+                        subjectSums[s] += grade;
+                        subjectCounts[s]++;
+                        grandTotal += grade;
+                        totalCount++;
+                    }
+                });
+            });
+
+            const overallAvg = totalCount > 0 ? (grandTotal / totalCount).toFixed(2) : '0.00';
+            document.getElementById('kpi-media').innerText = overallAvg;
+
+            const badge = document.getElementById('badge-status');
+            if (parseFloat(overallAvg) >= 7.0) {
+                badge.className = "px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                badge.innerText = "Desempenho Adequado";
+            } else {
+                badge.className = "px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20";
+                badge.innerText = "Atenção Necessária";
+            }
+
+            let bestSubj = '--', bestScore = -1;
+            let worstSubj = '--', worstScore = 999;
+
+            activeSubjects.forEach(s => {
+                if (subjectCounts[s] > 0) {
+                    const avg = subjectSums[s] / subjectCounts[s];
+                    if (avg > bestScore) { bestScore = avg; bestSubj = s; }
+                    if (avg < worstScore) { worstScore = avg; worstSubj = s; }
+                }
+            });
+
+            document.getElementById('kpi-melhor-disciplina').innerText = bestSubj;
+            document.getElementById('kpi-melhor-nota').innerText = bestScore >= 0 ? bestScore.toFixed(2) : '--';
+
+            document.getElementById('kpi-pior-disciplina').innerText = worstSubj;
+            document.getElementById('kpi-pior-nota').innerText = worstScore < 999 ? worstScore.toFixed(2) : '--';
+
+            document.getElementById('kpi-contagem').innerText = data.length;
+        }
+
+        function renderCharts(data) {
+            const averages = activeSubjects.map(s => {
+                const validGrades = data.map(d => parseGrade(d[s])).filter(g => g > 0);
+                if (validGrades.length === 0) return 0;
+                return (validGrades.reduce((a, b) => a + b, 0) / validGrades.length).toFixed(2);
+            });
+
+            const barColors = averages.map(val => {
+                const num = parseFloat(val);
+                if (num < 7.0) return '#ef4444'; 
+                if (num > 8.5) return '#38bdf8'; 
+                return '#eab308';                
+            });
+
+            const ctxBar = document.getElementById('chart-barras').getContext('2d');
+            if (chartBarInstance) chartBarInstance.destroy();
+            chartBarInstance = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: activeSubjects,
+                    datasets: [{
+                        label: 'Média de Aproveitamento',
+                        data: averages,
+                        backgroundColor: barColors,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, max: 10, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 9 } } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            const ctxRadar = document.getElementById('chart-radar').getContext('2d');
+            if (chartRadarInstance) chartRadarInstance.destroy();
+            chartRadarInstance = new Chart(ctxRadar, {
+                type: 'radar',
+                data: {
+                    labels: activeSubjects,
+                    datasets: [{
+                        label: 'Perfil Multidisciplinar',
+                        data: averages,
+                        backgroundColor: 'rgba(168, 85, 247, 0.25)',
+                        borderColor: '#a855f7',
+                        pointBackgroundColor: '#c084fc',
+                        pointBorderColor: '#fff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 1000, easing: 'easeInOutQuart' },
+                    scales: {
+                        r: {
+                            angleLines: { color: '#334155' },
+                            grid: { color: '#334155' },
+                            pointLabels: { color: '#94a3b8', font: { size: 8 } },
+                            ticks: { display: false },
+                            suggestedMin: 0,
+                            suggestedMax: 10
+                        }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function renderTable(dataToRender) {
+            const selSegmento = document.getElementById('select-segmento').value;
+            const selTrim = document.getElementById('select-trimestre').value;
+            const selTurma = document.getElementById('select-turma').value;
+            const selAluno = document.getElementById('select-aluno').value;
+
+            let filtered = dataToRender || RAW_DATA.filter(item => {
+                const matchSeg = selSegmento === 'ALL' || item.SEGMENTO === selSegmento;
+                const matchTrim = selTrim === 'ALL' || item.TRIMESTRE === selTrim;
+                const matchTurma = selTurma === 'ALL' || String(item.TURMA) === String(selTurma);
+                const matchAluno = selAluno === 'ALL' || item.ALUNO === selAluno;
+                return matchSeg && matchTrim && matchTurma && matchAluno;
+            });
+
+            const searchTerm = document.getElementById('table-search').value.toLowerCase();
+            if (searchTerm) {
+                filtered = filtered.filter(d => d.ALUNO && d.ALUNO.toLowerCase().includes(searchTerm));
+            }
+
+            const thead = document.getElementById('table-head');
+            thead.innerHTML = `
+                <tr>
+                    <th class="py-3 px-4">Segmento</th>
+                    <th class="py-3 px-4">Turma</th>
+                    <th class="py-3 px-4">Aluno</th>
+                    <th class="py-3 px-4">Trimestre</th>
+                    ${activeSubjects.map(s => `<th class="py-3 px-4 text-center whitespace-nowrap">${s}</th>`).join('')}
+                    <th class="py-3 px-4 text-center font-bold text-sky-400">Média</th>
+                </tr>
+            `;
+
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+
+            filtered.slice(0, 50).forEach(row => {
+                let total = 0, count = 0;
+                activeSubjects.forEach(s => {
+                    const g = parseGrade(row[s]);
+                    if (g > 0) { total += g; count++; }
+                });
+                const avg = count > 0 ? (total / count).toFixed(2) : '-';
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/50 transition-colors";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-medium text-sky-400 whitespace-nowrap">${getSegmentoNome(row.SEGMENTO)}</td>
+                    <td class="py-3 px-4 font-medium text-slate-200 whitespace-nowrap">${row.TURMA || ''}</td>
+                    <td class="py-3 px-4 text-white font-semibold whitespace-nowrap">${row.ALUNO || ''}</td>
+                    <td class="py-3 px-4 text-slate-400 whitespace-nowrap">${row.TRIMESTRE || ''}</td>
+                    ${activeSubjects.map(s => `<td class="py-3 px-4 text-center">${row[s] !== undefined ? row[s] : '-'}</td>`).join('')}
+                    <td class="py-3 px-4 text-center font-bold text-sky-400 bg-sky-500/5">${avg}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        fetchSheetData();
+
+        // Registro de Service Worker para PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Fail:', err));
+            });
+        }
+    </script>
+</body>
+</html>
